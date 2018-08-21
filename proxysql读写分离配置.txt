@@ -1,0 +1,121 @@
+ProxySQL读写分离：
+系统版本：centos7
+MySQL集群环境：多个主从集群，下面以2个集群举例
+
+集群一(cluster1)：
+Master：172.17.101.40:3306
+Slave：172.17.101.56:3306
+Slave：172.17.101.57:3306
+
+集群二(cluster2)：
+Master：172.17.101.40:3307
+Slave：172.17.101.56:3307
+Slave：172.17.101.57:3307
+
+
+step1：分别在MySQL中创建proxysql监控用户，用于监控数据库状态
+create user 'proxysql_monitor'@'172.17.101.%' identified by '123.com';
+grant usage,replication client,super on *.* to 'proxysql_monitor'@'172.17.101.%';
+flush privileges;
+
+# 进入ProxySQL的管理界面
+mysql -uadmin -p123.com -h127.0.0.1 -P6032 --prompt='Admin> '
+
+
+# 设置监控数据库的用户名和密码
+set mysql-monitor_username='proxysql_monitor';
+set mysql-monitor_password='123.com';
+
+# 设置其他系统参数
+set mysql-server_version='5.7.22';
+set mysql-default_charset='utf8';
+set mysql-max_connections = 8192;
+set mysql-max_allowed_packet=33554432;
+set mysql-threads=8;
+
+load mysql variables to run;
+save mysql variables to disk;
+
+step2：分别给两个集群创建读写分离主机组
+insert into  mysql_replication_hostgroups(writer_hostgroup,reader_hostgroup,comment)
+values(10,11,'cluster1 RW Split');
+insert into  mysql_replication_hostgroups(writer_hostgroup,reader_hostgroup,comment)
+values(20,21,'cluster2 RW Split');
+
+
+step3：分别添加两个集群的主机实例
+# 最后一条的权重设置为1，表示从库正常时，只负载极低的读操作，只要当所有slave宕机时，才提供所有的读操作，防止不可读
+insert into mysql_servers(hostgroup_id,hostname,port,max_replication_lag,weight,comment)
+values(10,'172.17.101.40',3306,0,1,'cluster1 master');
+insert into mysql_servers(hostgroup_id,hostname,port,max_replication_lag,weight,comment)
+values(11,'172.17.101.56',3306,10,1000, 'cluster1 slave');
+insert into mysql_servers(hostgroup_id,hostname,port,max_replication_lag,weight,comment)
+values(11,'172.17.101.57',3306,10,1000, 'cluster1 slave');
+insert into mysql_servers(hostgroup_id,hostname,port,weight,comment)
+values(11,'172.17.101.40',3306,1,'cluster1 master for backup read');
+
+insert into mysql_servers(hostgroup_id,hostname,port,max_replication_lag,weight,comment)
+values(20,'172.17.101.40',3307,0,1,'cluster2 master');
+insert into mysql_servers(hostgroup_id,hostname,port,max_replication_lag,weight,comment)
+values(21,'172.17.101.56',3307,10,1000, 'cluster2 slave');
+insert into mysql_servers(hostgroup_id,hostname,port,max_replication_lag,weight,comment)
+values(21,'172.17.101.57',3307,10,1000, 'cluster2 slave');
+insert into mysql_servers(hostgroup_id,hostname,port,weight,comment)
+values(21,'172.17.101.40',3307,1,'cluster2 master for backup read');
+
+
+step4：分别添加两个集群的用户到proxysql的用户表，该用户必须存在于mysql中
+# transaction_persistent=1表示事务内的查询不会被发送到别的组，即：事务内的所有SQL都会被发送到主库
+INSERT INTO mysql_users(username,password,active,transaction_persistent,default_hostgroup,max_connections)
+VALUES ('zhangsan','123.com',1,1,10,1000);
+INSERT INTO mysql_users(username,password,active,transaction_persistent,default_hostgroup,max_connections)
+VALUES ('lisi','123.com',1,1,20,1000);
+
+
+step5：分别为两个集群插入规则，基于用户划分规则
+# 定义路由规则（使用match_digest而不是match_pattern）
+# 使用flagin和flagout来设置链规则，提示规则匹配的性能，减少不必要规则的匹配
+# 默认语句起始标志值为：0，因此第一条flagin必须设置为：0，否则新的flagin和flagout不工作
+# 子链的flagin需设置为父链的flagout的值
+# 前rule_id<1000的预留给flagout
+insert into mysql_query_rules(rule_id,flagin,flagout,username,active,retries,apply)
+values(1,0,1000,'zhangsan',1,3,0);
+insert into mysql_query_rules(rule_id,flagin,flagout,username,active,retries,apply)
+values(2,0,1100,'lisi',1,3,0);
+
+
+# 前rule_id>1000的预留给flagin
+# 新加的规则顺序加入即可
+INSERT INTO mysql_query_rules(rule_id,flagin,match_digest,destination_hostgroup,active,apply)
+VALUES (1001,1000,'^SELECT .* FOR UPDATE',10,1,1);
+INSERT INTO mysql_query_rules(rule_id,flagin,digest,destination_hostgroup,active,apply)
+VALUES (1002,1000,'0xB17CC7AAA7E39A4A',11,1,1);
+
+INSERT INTO mysql_query_rules(rule_id,flagin,match_digest,destination_hostgroup,active,apply)
+VALUES (1003,1100,'^SELECT .* FOR UPDATE',20,1,1);
+INSERT INTO mysql_query_rules(rule_id,flagin,digest,destination_hostgroup,active,apply)
+VALUES (1004,1100,'0xF2B8744ED166104A',21,1,1);
+
+## apply=0，表示匹配到该条规则后，继续匹配下一条规则，应用匹配到的最后一条规则
+## apply=1，表示匹配到改条规则后，应用匹配到的该条规则，不继续匹配，后面的规则忽略
+
+## select .* for update查询匹配rule_id=1，因此该查询被转发到destination_hostgroup=10的主机
+## 非select.* for update的select .* 查询匹配rule_id=2，因此该类查询被转发到destination_hostgroup=11的主机
+## 未被匹配到的SQL查询(update,insert,delete等)，被路由到匹配username='fzf'的默认主机组(default_hostgroup=10，上面在mysql_replication_hostgroups中定义了该组为写组)
+## 所有事物内的SQL默认被路由到匹配username='fzf'的默认主机组(default_hostgroup=10)，即写组
+
+step6：加载配置并持久化
+load mysql users to runtime;
+save mysql users to disk;
+
+load mysql servers to runtime;
+save mysql servers to disk;
+
+load mysql variables to runtime;
+save mysql variables to disk;
+
+load mysql query rules to runtime;
+save mysql query rules to disk;
+
+# 查看规则被匹配的次数
+select * from stats_mysql_query_rules;

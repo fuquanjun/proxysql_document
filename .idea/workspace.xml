@@ -2,9 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="809009e6-ed77-4de0-adf3-f97e3e06e829" name="Default" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/PCS高可用" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/proxysql读写分离配置.txt" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -15,11 +13,20 @@
   </component>
   <component name="FileEditorManager">
     <leaf>
-      <file leaf-file-name="PCS高可用" pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/PCS高可用">
+      <file leaf-file-name="PCS高可用.txt" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/PCS高可用.txt">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="532">
               <caret line="59" column="5" selection-start-line="59" selection-start-column="5" selection-end-line="59" selection-end-column="5" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="proxysql读写分离配置.txt" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/proxysql读写分离配置.txt">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="923">
+              <caret line="120" column="38" selection-start-line="120" selection-start-column="38" selection-end-line="120" selection-end-column="38" />
             </state>
           </provider>
         </entry>
@@ -33,6 +40,7 @@
     <option name="CHANGED_PATHS">
       <list>
         <option value="$PROJECT_DIR$/PCS高可用" />
+        <option value="$PROJECT_DIR$/proxysql读写分离配置.txt" />
       </list>
     </option>
   </component>
@@ -138,10 +146,17 @@
     <option name="myLimit" value="2678400000" />
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/PCS高可用">
+    <entry file="file://$PROJECT_DIR$/PCS高可用.txt">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="532">
           <caret line="59" column="5" selection-start-line="59" selection-start-column="5" selection-end-line="59" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/proxysql读写分离配置.txt">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="923">
+          <caret line="120" column="38" selection-start-line="120" selection-start-column="38" selection-end-line="120" selection-end-column="38" />
         </state>
       </provider>
     </entry>
